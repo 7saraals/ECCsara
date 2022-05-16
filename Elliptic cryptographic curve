@@ -1,0 +1,311 @@
+# Importing required libraries
+
+import math
+import random
+import hashlib
+# Initialzing constants, keys and prime number required
+privateKey = 100
+primeNumber = 4093
+randomSender = random.choice(range(1,primeNumber))
+curveConstantA = 11
+curveConstantB = 37
+randomK = 5
+
+def main():
+    # Initializing elliptic cryptographic curve
+    ellipticCurveCrypto = ElGamal(curveConstantA, curveConstantB, primeNumber, randomK, randomSender, privateKey)
+
+    # start of the SARA version ECC Cryptosystem
+    print("ECC ECC ECC ECC SARA ECC ECC ECC ECC ")
+    print("Welcome in SARA version  ECC Cryptosystem")
+    print("The value of the mod N is", primeNumber)
+    print("The Public key = ", ellipticCurveCrypto.publicKey)
+    print("The Public key = ", ellipticCurveCrypto.privateKey)
+
+    # Bob Side, Bob input a message then encrypt the message and send it to Alice.
+    inputMessage = input("\nEnter the message to be encrypted : ")
+
+    # Encrypting input message
+    cipherpoints = ellipticCurveCrypto.encrypt(inputMessage)
+
+    # Decrypting cipherpoints obtained
+    plaintext = ellipticCurveCrypto.decrypt(cipherpoints)
+
+    # Printing encrypted result
+    print("The result of the plian text encrypted by SARA version  ECC Cryptosystem are =")
+    for pair in cipherpoints:
+        print(pair[0], pair[1])
+    print("Encrypted ciphertext sent to Alice successfully")
+
+    # Alice side, Alice receives a message from Bob then decrypt the message and print it to Alice
+    # Printing decrypted result
+    print("New message received from Bob :")
+    for pair in cipherpoints:
+        print(pair[0], pair[1])
+    print("\nDecypted plaintext is :", plaintext, "\n")
+
+    print("sign message for bob at alice side :")
+    msg_sign = input("Enter your message to sign it")
+    hash = hash_msg(msg_sign)
+    hash_cipher = ellipticCurveCrypto.encrypt(hash)
+    # encrypt hash value with private key
+    print(f"the message is:{msg_sign}")
+    print("the signature is:")
+    for pair in cipherpoints:
+        print(pair[0], pair[1])
+
+    print("verify message at bob side")
+    hash_plain = ellipticCurveCrypto.decrypt(hash_cipher)
+    hash = hash_msg(msg_sign)
+    print(hash)
+    print(hash_plain)
+    if (hash_plain == hash):
+        print("message have successfully verified")
+        print("the message is" + msg_sign)
+    else:
+        print(" verified fail")
+
+
+
+def hash_msg(msg):
+    hash_obj = hashlib.md5(msg.encode())
+    return hash_obj.hexdigest()
+class EllipticCurve :
+    def __init__(self, a, b, p):
+        """Function to initialize elliptic curve."""
+
+        # Initialzing variables required
+        self.a = a
+        self.b = b
+        self.p = p
+
+    def addition(self, firstPoint, secondPoint) :
+        """Function to add points on elliptic curve."""
+
+        # Returning if points are at infinity
+        if firstPoint.isInfinity() :
+            return Point(secondPoint.x,secondPoint.y)
+        if secondPoint.isInfinity() :
+            return Point(firstPoint.x,firstPoint.y)
+
+        # If points are same
+        if firstPoint.equal(secondPoint) :
+            return self.selfAddition(firstPoint)
+        # Otherwise
+        else :
+            if firstPoint.x == secondPoint.x :
+                return Point(-1, -1)
+            else :
+                deltaX = (firstPoint.x - secondPoint.x)
+                gradient = ((firstPoint.y - secondPoint.y) * self.inverseModulo(deltaX)) % self.p
+                newX = (gradient ** 2 - (firstPoint.x + secondPoint.x)) % self.p
+                newY = (gradient * (firstPoint.x - newX) - firstPoint.y) % self.p
+
+                return Point(newX,newY)
+
+    def selfAddition(self, point):
+        """Function to do self addition."""
+        # Exceptional case
+        if point.y == 0:
+            return Point(-1, -1)
+        else :
+
+            # Doing self addition
+            gradient = ((3 * (point.x ** 2) + self.a) * self.inverseModulo(2 * point.y)) % self.p
+            newX = (gradient ** 2 - 2 * point.x) % self.p
+            newY = (gradient * (point.x - newX) - point.y) % self.p
+
+            # Returning result
+            return Point(newX, newY)
+
+    def multiplication(self, point, constant):
+        """Function to do multiplication on curve."""
+
+        # Base case
+        if constant == 1:
+            return Point(point.x, point.y)
+
+        # Recursions
+        if constant % 2 == 0:
+            return self.selfAddition(self.multiplication(point, math.floor(constant / 2)))
+        else:
+            tempPoint = self.multiplication(self.multiplication(point, math.floor(constant / 2)), 2)
+            return self.addition(tempPoint, point)
+
+    def inverseModulo(self, num):
+        """Function to perform inverse modulo operation."""
+
+        # Computing inverse modulo
+        for i in range(1, self.p):
+            if (num * i) % self.p == 1 :
+                return i
+        return 0
+
+    def generatePoints(self,x):
+        """Function to generate points as a list and return."""
+
+        # Initializing variables required
+        tempList = []
+        remainder = self.y(x)
+
+        # Appending required points to list
+        for y in range(1, self.p) :
+                if y ** 2 % self.p == remainder :
+                    tempList.append(y)
+
+        # Returning list
+        return tempList
+
+    def y(self,x):
+        """Function for elliptic curve formula y calculation."""
+        # Returning computed value
+        return (x ** 3 + self.a * x + self.b) % self.p
+
+class ElGamal :
+
+    def __init__(self, curveA, curveB, prime, randomK, senderRandom, privateKey, encoding = 'ascii'):
+        """Function to initialize variables."""
+
+        # Initializing variables
+        self.privateKey = privateKey
+        self.primeNumber = prime
+        self.senderRandom = senderRandom
+        self.ellipticCurve = EllipticCurve(curveA, curveB, prime)
+        self.randomK = randomK
+        self.encoding = encoding
+
+        # Generating base
+        self.generateBase()
+
+        # Getting public key
+        self.publicKey = self.ellipticCurve.multiplication(self.basePoint, privateKey)
+
+    def encrypt(self, message) :
+        """Function to perform encryption algorithm."""
+
+        # Initialzing ciphertext points list
+        ciphertextPoints = []
+
+        # Encoding plaintext message
+        encodedPoints = self.encodePlaintext(message)
+
+        # Encrypting all the points
+        for point in encodedPoints :
+            ciphertextPoints.append(self.encryptPoint(point))
+
+        # Returning result
+        return ciphertextPoints
+
+    def decrypt(self, cipherpoints) :
+        """Function to perform decryption algorithm."""
+
+        # Initialzing plaintext points list
+        plaintextPoints = []
+
+        # Decrypting all the point pairs
+        for pointPair in cipherpoints :
+            plaintextPoints.append(self.decryptPointPair(pointPair))
+
+        # Decoding and returning answer
+        return self.decodePoints(plaintextPoints)
+
+
+    def generateBase(self):
+        """Function to generate base."""
+
+        # Boolean for breaking
+        isFound = False
+
+        # Running till base is not found
+        while not isFound:
+            x = random.choice(range(1, self.primeNumber))
+            yList = self.ellipticCurve.generatePoints(x)
+            if len(yList) > 0:
+                isFound = True
+                self.basePoint = Point(x, random.choice(yList))
+
+    def encodePlaintext(self, plaintext):
+        """Function to encode the plaintext."""
+
+        # Getting byte array of plaintext according to encoding
+        byteArray = bytearray(plaintext, self.encoding)
+
+        # Initializing chunks list
+        chunksList = []
+
+        # For each byte
+        for byte in byteArray :
+            # For each number from 0 till random k
+            for j in range(self.randomK) :
+
+                # Performing operations as required in algorithm
+                x = byte * self.randomK + j
+                yList = self.ellipticCurve.generatePoints(x)
+
+                # Breaking early if required
+                if len(yList) > 0:
+                    y = random.choice(yList)
+                    chunksList.append(Point(x, y))
+                    break
+
+        # Returning chunks list
+        return chunksList
+
+    def decodePoints(self, plaintextPoints):
+        """Function to decode the plaintext points."""
+
+        # Initialzing string required
+        string = ""
+
+        # Decoding
+        for point in plaintextPoints :
+            string += chr(math.floor(point.x / self.randomK))
+
+        # Returning decoded value
+        return string
+
+    def encryptPoint(self, point):
+        """Function to encrypt a point."""
+
+        # Performing multiplication and addition for encryption as required
+        firstCipher = self.ellipticCurve.multiplication(self.basePoint, self.senderRandom)
+        secondCipher = self.ellipticCurve.addition(point, self.ellipticCurve.multiplication(self.publicKey, self.senderRandom))
+
+        # Returning answer
+        return [firstCipher, secondCipher]
+
+    def decryptPointPair(self, pointPair) :
+        """Function to encrypt a point pair."""
+
+        # Getting first block and its inverse
+        firstBlock = self.ellipticCurve.multiplication(pointPair[0], self.privateKey)
+        firstBlockInverse = Point(firstBlock.x, (-firstBlock.y) % self.primeNumber)
+
+        # Returning the addition to get answer
+        return self.ellipticCurve.addition(pointPair[1], firstBlockInverse)
+
+class Point :
+    def __init__(self, x, y):
+        """Function to initialize point of elliptic curve."""
+        # Initialzing variables required
+        self.x = x
+        self.y = y
+
+    def equal(self, otherPoint) :
+        """Function to return boolean of whether equal or not."""
+        # Returning boolean
+        return self.x == otherPoint.x and self.y == otherPoint.y
+
+    def isInfinity(self) :
+        """Function to check if point is infinity."""
+        # Returning boolean
+        return self.x == -1 and self.y == -1
+
+    def __str__(self):
+        """Function to print point as required in string form."""
+        # Returning string
+        return str(self.x) + "," + str(self.y)
+
+# Calling main function
+if __name__ == "__main__":
+    main()
